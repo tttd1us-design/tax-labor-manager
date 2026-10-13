@@ -327,10 +327,71 @@
   <div class="card">
     <h2>🔌 2주차 연동 설계 요약 (결재 전 · 설계까지만)</h2>
     <p class="muted" style="margin-bottom:10px;">아래는 대표이사 사전 결재 후 착수 예정인 2주차 항목의 설계 요약입니다. 실제 결제 연동·외부 API 키 발급·외부 배포는 결재 전까지 착수하지 않습니다.</p>
-    <pre><code>[설계 요약 — 상세 문서: docs/2주차_결제모듈_설계_v1.md]
+    <pre><code>[설계 요약 — 상세 문서: docs/payment-design.md]
 1) 결제(PG): 정적 프론트 + 서버리스 결제확인 엔드포인트 구조. 키는 서버측 환경변수 보관(코드·프론트 노출 금지).
-2) 무료 배포 후보: GitHub Pages / Cloudflare Pages / Netlify (정적, 0원). 상세: docs/2주차_무료배포_후보경로_v1.md
+2) 무료 배포 후보: GitHub Pages / Cloudflare Pages / Netlify (정적, 0원). 상세: docs/deployment-plan.md
 3) 승인 게이트: PG 가입·API 키·외부 게시는 모두 대표이사 최종 결재 대상.</code></pre>
+  </div>
+
+  <!-- 결제 모듈 UI (비기능 설계 시각화) -->
+  <div class="card">
+    <h2>💳 결제 모듈 UI (설계 단계 — 비기능 Mockup)</h2>
+    <p class="muted" style="margin-bottom:10px;">아래 UI는 결제 모듈 설계 시각화용 Mockup입니다. 실제 결제 기능은 대표이사 결재 후 구현됩니다.</p>
+
+    <!-- 구독 등급 카드 -->
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:150px;border:2px solid #4a90d9;border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-weight:bold;font-size:18px;">Free</div>
+        <div style="font-size:24px;font-weight:bold;color:#4a90d9;">0원</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">· 기본 세무 일정 DB<br>· 간이 세금 계산기(5종)<br>· 브라우저 알림<br>· ICS 내보내기</div>
+        <div style="margin-top:8px;font-size:12px;color:#28a745;font-weight:bold;">✅ 사용 중</div>
+      </div>
+      <div style="flex:1;min-width:150px;border:2px solid #f0ad4e;border-radius:8px;padding:12px;text-align:center;position:relative;">
+        <div style="font-weight:bold;font-size:18px;">Pro</div>
+        <div style="font-size:24px;font-weight:bold;color:#f0ad4e;">9,900원</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">· 사업자 유형별 자동 필터링<br>· 계산 결과 PDF 내보내기<br>· 맞춤 세액공제 추천</div>
+        <div style="position:absolute;top:-10px;right:-10px;background:#f0ad4e;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">프리미엄</div>
+        <button type="button" onclick="showPaymentLocked('Pro')" style="margin-top:8px;padding:6px 16px;background:#f0ad4e;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+          🔒 결제 필요
+        </button>
+      </div>
+      <div style="flex:1;min-width:150px;border:2px solid #dc3545;border-radius:8px;padding:12px;text-align:center;position:relative;">
+        <div style="font-weight:bold;font-size:18px;">Business</div>
+        <div style="font-size:24px;font-weight:bold;color:#dc3545;">29,000원</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">· Pro 기능 전체<br>· 팀 공유(최대 5명)<br>· 직원 4대보험 통계 대시보드<br>· 사업자등록번호 연동</div>
+        <div style="position:absolute;top:-10px;right:-10px;background:#dc3545;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">프리미엄</div>
+        <button type="button" onclick="showPaymentLocked('Business')" style="margin-top:8px;padding:6px 16px;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+          🔒 결제 필요
+        </button>
+      </div>
+    </div>
+
+    <!-- 구독 상태 표시 -->
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:12px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <strong>구독 상태:</strong> <span style="color:#28a745;font-weight:bold;">Free 등급 (무료)</span>
+        </div>
+        <div style="font-size:12px;color:#666;">만료: 무제한</div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:#888;">
+        💡 Pro 또는 Business 등급을 구독하면 프리미엄 기능을 사용할 수 있습니다. 대표이사 결재 후 결제 모듈이 활성화됩니다.
+      </div>
+    </div>
+
+    <!-- 결제 잠금 안내 모달 -->
+    <div id="payment-locked-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+      <div style="background:white;border-radius:8px;max-width:400px;margin:100px auto;padding:24px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">🔒</div>
+        <h3 style="margin:0 0 12px;">프리미엄 기능</h3>
+        <p style="color:#666;margin-bottom:20px;">결제 모듈은 대표이사 최종 결재 후 활성화됩니다.<br>결재 완료 시 자동으로 기능이 잠금 해제됩니다.</p>
+        <button type="button" onclick="document.getElementById('payment-locked-modal').style.display='none'" style="padding:8px 24px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">확인</button>
+      </div>
+    </div>
+
+    <div class="disclaimer-inline">
+      [법적 면책 고지] 결제 모듈 설계 단계의 UI 시각화이며, 실제 결제 기능은 구현되지 않았습니다. 결제 연동은 대표이사 사전 결재 후 진행됩니다.
+    </div>
   </div>
 
 </div><!-- /container -->
@@ -345,6 +406,15 @@
    데이터: 정기 일정 생성 + 연간 고정 일정 + 사용자 일정
    ───────────────────────────────────────────────────────────────────────── */
 const DISCLAIMER = "본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다.";
+
+function showPaymentLocked(tier){
+  alert(
+    '💳 ['+tier+' 등급 결제]\n\n' +
+    '결제 모듈은 대표이사 최종 결재 후 활성화됩니다.\n' +
+    '결재 완료 시 자동으로 프리미엄 기능이 잠금 해제됩니다.\n\n' +
+    '자세한 내용은 docs/payment-design.md 를 참고하십시오.'
+  );
+}
 
 function fmt(n){ return Math.round(n).toLocaleString('ko-KR'); }
 function yearOf(){ return new Date().getFullYear(); }
