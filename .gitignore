@@ -1,0 +1,17 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+*.swp
+*.swo
+*~
+
+# Scratch/temp
+_tmp_check.js
+_T_tmp*
+*.pyc
+__pycache__/
+
+# Backup
+*_backup_*

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세무 일정 관리 + 세금 계산기</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>세무 일정 관리</h1>
+        <section id="schedule-section">
+            <h2>일정 관리</h2>
+            <div id="schedule-form">
+                <input type="date" id="schedule-date" placeholder="날짜">
+                <input type="text" id="schedule-title" placeholder="일정 제목">
+                <button id="add-schedule">추가</button>
+            </div>
+            <ul id="schedule-list"></ul>
+        </section>
+
+        <section id="tax-calculator-section">
+            <h2>세금 계산기</h2>
+            <div id="tax-form">
+                <label>소득액 (원): <input type="number" id="income" placeholder="예: 5000000"></label><br>
+                <label>세율 (%): <input type="number" id="tax-rate" value="6" step="0.1"></label><br>
+                <button id="calculate-tax">세금 계산</button>
+            </div>
+            <div id="tax-result"></div>
+        </section>
+
+        <section id="notification-section">
+            <h2>알림 설정</h2>
+            <button id="request-notify">알림 권한 요청</button>
+            <button id="test-notify">테스트 알림 발송</button>
+        </section>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tax &amp; Labor Manager — 세무·노무 일정 및 간이 계산 보조 도구</title>
+<!--
+  ============================================================================
+  Tax & Labor Manager (세무·노무 일정 관리 + 세금 간이 계산 보조 도구)
+  - 10조 스튜디오 · automation · 정본 v2 (2026-10-13 확장판)
+  - 단일 파일 정적 웹 앱(HTML/CSS/JS, 외부 라이브러리 0). 서버·DB 없음.
+  - 개인정보: 모든 입력값은 브라우저 localStorage에만 저장되며 외부 전송 없음.
+  - 법적 성격: 세무 대리·신고 대행이 아닌 '단순 일정 관리 및 세액 계산 참고용 보조'.
+  - 근거(2026 요율): 보건복지부 2026년 건강보험료율 7.19% 결정 보도자료,
+    국민연금 9.5%(연금개혁), 고용보험 실업급여 1.8%, 장기요양 건보료의 12.95%.
+    4대보험 정보연계센터·국세청 홈택스 공시 기준. 요율은 매년 변동될 수 있음.
+  ============================================================================
+-->
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1d4ed8; --bg:#f8fafc; --card:#ffffff;
+    --text:#1e293b; --muted:#64748b; --border:#e2e8f0;
+    --warn-bg:#fef3c7; --warn-border:#f59e0b; --warn-text:#92400e;
+    --danger:#dc2626; --ok:#059669;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
+  body{background:var(--bg);color:var(--text);line-height:1.6;padding-bottom:70px;}
+
+  /* ── 법적 면책 고지 (상단·하단 영구 고정) ───────────────────────────── */
+  .disclaimer-banner{background:var(--warn-bg);border-bottom:2px solid var(--warn-border);
+    color:var(--warn-text);padding:10px 20px;font-size:.88rem;text-align:center;font-weight:bold;
+    position:sticky;top:0;z-index:1000;}
+  .disclaimer-footer{background:var(--warn-bg);border-top:2px solid var(--warn-border);
+    color:var(--warn-text);padding:15px 20px;font-size:.88rem;text-align:center;font-weight:bold;margin-top:40px;}
+  .disclaimer-inline{background:#fffbeb;border:1px solid var(--warn-border);border-left:4px solid var(--warn-border);
+    color:var(--warn-text);padding:10px 12px;border-radius:6px;font-size:.82rem;margin-top:10px;line-height:1.5;}
+
+  header{background:var(--primary);color:#fff;padding:22px 20px;text-align:center;}
+  header h1{font-size:1.6rem;margin-bottom:6px;}
+  header p{font-size:.95rem;opacity:.92;}
+
+  .tabs{display:flex;justify-content:center;gap:0;background:#fff;border-bottom:1px solid var(--border);
+    position:sticky;top:44px;z-index:900;flex-wrap:wrap;}
+  .tab{padding:12px 20px;cursor:pointer;border:none;background:none;font-size:.95rem;font-weight:bold;
+    color:var(--muted);border-bottom:3px solid transparent;}
+  .tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .container{max-width:1200px;margin:24px auto;padding:0 20px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:22px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:24px;}
+  .card h2{font-size:1.2rem;color:var(--primary);margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:8px;}
+
+  .filterbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .filterbar select,.filterbar input{padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-size:.9rem;}
+  .filterbar input{flex:1;min-width:140px;}
+
+  .upcoming{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px 16px;margin-bottom:14px;
+    display:flex;align-items:center;justify-content:space-between;font-weight:bold;color:var(--primary-dark);font-size:.95rem;}
+
+  .schedule-list{max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;}
+  .schedule-item{padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .schedule-item:last-child{border-bottom:none;}
+  .schedule-item.urgent{background:#fef2f2;}
+  .schedule-item.soon{background:#fffbeb;}
+  .schedule-info h4{font-size:.98rem;margin-bottom:4px;}
+  .schedule-info p{font-size:.83rem;color:var(--muted);}
+  .badge{background:#dbeafe;color:var(--primary-dark);padding:3px 8px;border-radius:12px;font-size:.72rem;font-weight:bold;white-space:nowrap;}
+  .badge.dday{background:var(--danger);color:#fff;}
+  .badge.soon{background:var(--warn-border);color:#fff;}
+  .badge.labor{background:#dcfce7;color:#166534;}
+  .delbtn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer;
+    font-size:.75rem;padding:3px 8px;}
+
+  .form-group{margin-bottom:14px;}
+  .form-group label{display:block;font-size:.88rem;font-weight:bold;margin-bottom:5px;}
+  .form-group input,.form-group select{width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;font-size:1rem;}
+  .btn{background:var(--primary);color:#fff;border:none;padding:11px 20px;border-radius:4px;font-size:1rem;
+    font-weight:bold;cursor:pointer;width:100%;transition:background .2s;}
+  .btn:hover{background:var(--primary-dark);}
+  .btn.secondary{background:#fff;color:var(--primary);border:1px solid var(--primary);}
+  .btn.warn{background:var(--warn-border);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row .btn{width:auto;flex:1;min-width:130px;}
+
+  .result-box{background:#f1f5f9;border:1px solid var(--border);border-radius:6px;padding:16px;margin-top:16px;}
+  .result-box h3{font-size:1.05rem;margin-bottom:8px;}
+  .result-row{display:flex;justify-content:space-between;font-size:.95rem;padding:3px 0;}
+  .result-total{font-size:1.15rem;font-weight:bold;color:var(--primary-dark);border-top:1px solid var(--border);
+    margin-top:8px;padding-top:8px;}
+
+  pre{background:#1e293b;color:#f8fafc;padding:16px;border-radius:6px;overflow-x:auto;font-size:.82rem;line-height:1.5;}
+  table.data{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:8px;}
+  table.data th,table.data td{border:1px solid var(--border);padding:7px 10px;text-align:left;}
+  table.data th{background:#f1f5f9;}
+  .note{font-size:.8rem;color:var(--muted);margin-top:6px;}
+  .tag{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:4px;padding:1px 6px;font-size:.75rem;margin-left:4px;}
+  .muted{color:var(--muted);font-size:.85rem;}
+</style>
+</head>
+<body>
+
+<!-- 상단 법적 면책 고지 (영구 고정) -->
+<div class="disclaimer-banner">
+  [법적 면책 고지] 본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다.
+</div>
+
+<header>
+  <h1>Tax &amp; Labor Manager</h1>
+  <p>자영업자·소상공인·소규모 사업장을 위한 세무·노무 일정 관리 및 간이 계산 보조 도구</p>
+  <p style="font-size:.8rem;opacity:.85;margin-top:6px;">정본 v2 · 2026-10-13 · 단일 파일 정적 앱(서버·DB 없음) · 모든 입력값은 내 브라우저에만 저장</p>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPanel('panel-schedule',this)">📅 일정 관리</button>
+  <button class="tab" onclick="showPanel('panel-calc',this)">🧮 세금 계산기</button>
+  <button class="tab" onclick="showPanel('panel-alert',this)">🔔 알림 설정</button>
+  <button class="tab" onclick="showPanel('panel-privacy',this)">🔒 개인정보·면책</button>
+</div>
+
+<div class="container">
+
+<!-- ══════════════ 일정 관리 ══════════════ -->
+<div id="panel-schedule" class="panel active">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>📅 세무·노무 일정 목록</h2>
+        <div class="upcoming">
+          <span>🔔 30일 이내 주요 신고 일정</span>
+          <span id="upcoming-count" class="badge">0건</span>
+        </div>
+        <div class="filterbar">
+          <select id="filter-category" onchange="renderSchedules()">
+            <option value="ALL">전체 분류</option>
+            <option value="세무">세무 (국세·지방세)</option>
+            <option value="노무">노무 (4대보험·급여)</option>
+            <option value="신고안내">신고·환급 안내</option>
+            <option value="내일정">내가 추가한 일정</option>
+          </select>
+          <input type="text" id="search-keyword" placeholder="검색어 입력 (예: 부가세)" oninput="renderSchedules()">
+        </div>
+        <div class="schedule-list" id="schedule-container"></div>
+        <div class="note">※ 기한이 주말·공휴일이면 다음 영업일로 연장됩니다. 아래 날짜는 법령상 기준일이며 실제 고지·연장 여부는 국세청 홈택스/4대보험 정보연계센터에서 반드시 확인하세요.</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>➕ 내 일정 추가</h2>
+        <div class="form-group">
+          <label for="new-title">일정 제목</label>
+          <input type="text" id="new-title" placeholder="예: 거래처 세금계산서 정리">
+        </div>
+        <div class="form-group">
+          <label for="new-date">기한(날짜)</label>
+          <input type="date" id="new-date">
+        </div>
+        <div class="form-group">
+          <label for="new-category">분류</label>
+          <select id="new-category">
+            <option value="세무">세무</option>
+            <option value="노무">노무</option>
+            <option value="내일정">내 일정(기타)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="new-desc">메모 (선택)</label>
+          <input type="text" id="new-desc" placeholder="예: 홈택스에서 전자세금계산서 조회">
+        </div>
+        <button class="btn" onclick="addSchedule()">일정 추가</button>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn secondary" onclick="exportICS()">📤 캘린더 내보내기(.ics)</button>
+          <button class="btn secondary" onclick="resetSchedules()">기본 일정 복원</button>
+        </div>
+        <div class="note">내가 추가한 일정은 이 브라우저(localStorage)에만 저장되며, 외부로 전송되지 않습니다.</div>
+      </div>
+
+      <div class="card">
+        <h2>ℹ️ 기준 안내</h2>
+        <p class="muted">본 목록은 개인 일반과세자·간이과세자·소규모 사업장을 기준으로 한 <b>참고용 기본 일정</b>입니다. 법인사업자(법인세·부가세 예정신고), 성실신고확인대상자, 반기납부 승인 사업장은 신고 횟수·기한이 다를 수 있습니다.</p>
+        <p class="muted" style="margin-top:8px;">근거: 국세청 홈택스 신고납부 안내, 4대사회보험 정보연계센터, 2026년 건강보험료율 7.19%(보건복지부 결정).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 세금 계산기 ══════════════ -->
+<div id="panel-calc" class="panel">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>🧮 간이 계산기</h2>
+        <div class="form-group">
+          <label for="calc-type">계산 종류</label>
+          <select id="calc-type" onchange="toggleCalcType()">
+            <option value="vat">부가가치세 (일반과세자)</option>
+            <option value="vat-simple">부가가치세 (간이과세자)</option>
+            <option value="income">종합소득세 (기본세율)</option>
+            <option value="withholding">원천세 (사업소득 3.3% 프리랜서)</option>
+            <option value="insurance">4대보험 (근로자 부담분)</option>
+          </select>
+        </div>
+
+        <div id="f-vat">
+          <div class="form-group"><label for="vat-supply">과세표준 공급가액 합계 (원)</label>
+            <input type="number" id="vat-supply" value="50000000"></div>
+          <div class="form-group"><label for="vat-purchase">공제받을 매입세액 합계 (원)</label>
+            <input type="number" id="vat-purchase" value="3000000"></div>
+        </div>
+
+        <div id="f-vat-simple" style="display:none;">
+          <div class="form-group"><label for="vats-supply">공급대가 합계 (세금 포함 매출, 원)</label>
+            <input type="number" id="vats-supply" value="40000000"></div>
+          <div class="form-group"><label for="vats-rate">업종별 부가가치율 (%)</label>
+            <select id="vats-rate">
+              <option value="15">소매·음식점 등 (15%)</option>
+              <option value="20">제조·숙박 등 (20%)</option>
+              <option value="25">건설·운수 등 (25%)</option>
+              <option value="30" selected>부동산임대·기타 (30%)</option>
+            </select></div>
+          <div class="note">간이과세자 세액 = 공급대가 × 업종별 부가가치율 × 10%</div>
+        </div>
+
+        <div id="f-income" style="display:none;">
+          <div class="form-group"><label for="income-annual">연간 총수입금액 (매출, 원)</label>
+            <input type="number" id="income-annual" value="80000000"></div>
+          <div class="form-group"><label for="income-expense">연간 필요경비 (원)</label>
+            <input type="number" id="income-expense" value="50000000"></div>
+          <div class="form-group"><label for="income-deduct">소득공제 합계 — 본인·부양가족·연금 등 (원)</label>
+            <input type="number" id="income-deduct" value="1500000"></div>
+        </div>
+
+        <div id="f-withholding" style="display:none;">
+          <div class="form-group"><label for="wh-amount">지급액 (세전, 원)</label>
+            <input type="number" id="wh-amount" value="3000000"></div>
+          <div class="note">사업소득 3.3% = 소득세 3% + 지방소득세 0.3% (원천징수 후 다음 해 5월 종합소득세 신고 시 정산)</div>
+        </div>
+
+        <div id="f-insurance" style="display:none;">
+          <div class="form-group"><label for="ins-month">월 보수(세전 급여, 원)</label>
+            <input type="number" id="ins-month" value="3000000"></div>
+          <div class="note">2026년 근로자 부담: 국민연금 4.75% · 건강보험 3.595% · 장기요양 건보료×12.95% · 고용보험(실업급여) 0.9%. 산재보험은 전액 사업주 부담.</div>
+        </div>
+
+        <button class="btn" onclick="calculate()">간이 추정 실행</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>📊 추정 결과</h2>
+        <div class="result-box" id="calc-result">
+          <p class="muted">계산 종류와 금액을 선택한 뒤 [간이 추정 실행]을 누르세요.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>📌 2026년 요율 참고표</h2>
+        <table class="data">
+          <tr><th>항목</th><th>전체</th><th>근로자 부담</th></tr>
+          <tr><td>국민연금</td><td>9.5%</td><td>4.75%</td></tr>
+          <tr><td>건강보험</td><td>7.19%</td><td>3.595%</td></tr>
+          <tr><td>장기요양보험</td><td>건보료의 12.95%</td><td>절반</td></tr>
+          <tr><td>고용보험(실업급여)</td><td>1.8%</td><td>0.9%</td></tr>
+          <tr><td>산재보험</td><td>업종별(평균 약 1.4%)</td><td>0(사업주 전액)</td></tr>
+        </table>
+        <div class="note">출처: 보건복지부 2026 건강보험료율 결정(7.19%), 4대보험 정보연계센터·근로복지공단 공시. 요율·기준소득월액 상·하한(2026년 41만~659만 원)은 매년 변동될 수 있으므로 실제 급여명세서·공단 조회값을 최종 기준으로 삼으세요.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 알림 설정 ══════════════ -->
+<div id="panel-alert" class="panel">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>🔔 브라우저 알림</h2>
+        <p class="muted">신고 기한이 다가오면 브라우저 알림으로 알려드립니다. (이 탭이 열려 있는 동안 동작합니다.)</p>
+        <div class="form-group" style="margin-top:14px;">
+          <label for="alert-days">며칠 전에 알릴까요?</label>
+          <select id="alert-days" onchange="saveAlertPref()">
+            <option value="1">1일 전</option>
+            <option value="3" selected>3일 전</option>
+            <option value="7">7일 전</option>
+            <option value="14">14일 전</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn" onclick="requestNotify()">알림 권한 요청</button>
+          <button class="btn secondary" onclick="testNotify()">테스트 알림</button>
+        </div>
+        <div class="result-box" id="alert-status"><p class="muted">현재 알림 권한: 확인 전</p></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>📋 알림 대상 미리보기</h2>
+        <div class="schedule-list" id="alert-preview" style="max-height:360px;"></div>
+        <div class="note">정적 웹 앱 특성상 앱이 닫혀 있을 때는 알림이 오지 않습니다. 상시 알림이 필요하면 아래 캘린더 내보내기(.ics)로 휴대폰 기본 캘린더에 등록하는 방법을 권장합니다.</div>
+        <button class="btn secondary" style="margin-top:10px;" onclick="exportICS()">📤 캘린더 내보내기(.ics)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 개인정보·면책 ══════════════ -->
+<div id="panel-privacy" class="panel">
+  <div class="card">
+    <h2>🔒 개인정보 처리 및 법적 성격 안내</h2>
+    <p style="margin-bottom:10px;"><b>1. 수집하는 개인정보: 없음.</b> 본 도구는 회원가입·로그인이 없으며, 사업자등록번호·주민등록번호 등 민감정보를 수집·전송하지 않습니다. 사용자가 입력한 일정·금액은 오직 사용자의 브라우저 저장소(localStorage)에만 남고 외부 서버로 전송되지 않습니다.</p>
+    <p style="margin-bottom:10px;"><b>2. 법적 성격.</b> 본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다. 세무사법 제2조에 따른 세무 대리(기장·신고 대행·세무 자문)에 해당하지 않습니다.</p>
+    <p style="margin-bottom:10px;"><b>3. 계산 결과의 한계.</b> 모든 계산은 공개된 세율·요율을 적용한 단순 추정치이며, 소득공제·세액공제·가산세·감면·정산을 모두 반영하지 않습니다. 실제 신고 세액과 다를 수 있습니다.</p>
+    <p style="margin-bottom:10px;"><b>4. 최종 확인 의무.</b> 실제 신고·납부 금액과 기한은 국세청 홈택스(126), 4대사회보험 정보연계센터, 세무대리인(세무사)을 통해 반드시 확인하시기 바랍니다.</p>
+    <p><b>5. 근거 자료.</b> 일정: 국세청 홈택스 신고·납부 안내. 요율: 2026년 국민연금 9.5%·건강보험 7.19%·장기요양 건보료의 12.95%·고용보험(실업급여) 1.8%(보건복지부·근로복지공단 공시).</p>
+    <div class="disclaimer-inline">
+      [법적 면책 고지] 본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다.
+    </div>
+  </div>
+</div>
+
+  <!-- 2주차 연동 설계 (요약) -->
+  <div class="card">
+    <h2>🔌 2주차 연동 설계 요약 (결재 전 · 설계까지만)</h2>
+    <p class="muted" style="margin-bottom:10px;">아래는 대표이사 사전 결재 후 착수 예정인 2주차 항목의 설계 요약입니다. 실제 결제 연동·외부 API 키 발급·외부 배포는 결재 전까지 착수하지 않습니다.</p>
+    <pre><code>[설계 요약 — 상세 문서: docs/2주차_결제모듈_설계_v1.md]
+1) 결제(PG): 정적 프론트 + 서버리스 결제확인 엔드포인트 구조. 키는 서버측 환경변수 보관(코드·프론트 노출 금지).
+2) 무료 배포 후보: GitHub Pages / Cloudflare Pages / Netlify (정적, 0원). 상세: docs/2주차_무료배포_후보경로_v1.md
+3) 승인 게이트: PG 가입·API 키·외부 게시는 모두 대표이사 최종 결재 대상.</code></pre>
+  </div>
+
+</div><!-- /container -->
+
+<!-- 하단 법적 면책 고지 (영구 고정) -->
+<div class="disclaimer-footer">
+  [법적 면책 고지] 본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다.
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   데이터: 정기 일정 생성 + 연간 고정 일정 + 사용자 일정
+   ───────────────────────────────────────────────────────────────────────── */
+const DISCLAIMER = "본 도구는 세무 대리 및 신고 대행 서비스를 제공하지 않으며, 이용자의 편의를 위한 단순 일정 관리 및 세액 계산 참고용 보조 프로그램입니다.";
+
+function fmt(n){ return Math.round(n).toLocaleString('ko-KR'); }
+function yearOf(){ return new Date().getFullYear(); }
+
+// 연간 고정 일정 (매년 반복, 기준일)
+function annualEvents(y){
+  return [
+    { id:`a${y}-vats1`, title:"부가가치세 1기 예정신고·납부", date:`${y}-04-25`, category:"세무", desc:"법인 기준 1~3월 실적 예정신고 (개인 일반과세자는 예정고지 납부)" },
+    { id:`a${y}-resident`, title:"종합소득세 확정신고·납부", date:`${y}-05-31`, category:"세무", desc:`${y-1}년 귀속 종합소득세 확정신고 (성실신고확인대상자는 6월 30일)` },
+    { id:`a${y}-vat1`, title:"부가가치세 1기 확정신고·납부", date:`${y}-07-25`, category:"세무", desc:"1월 1일~6월 30일 과세기간 확정신고(개인·법인)" },
+    { id:`a${y}-vat2b`, title:"부가가치세 2기 예정신고·납부", date:`${y}-10-25`, category:"세무", desc:"7월 1일~9월 30일 실적 예정신고" },
+    { id:`a${y}-mid`, title:"종합소득세 중간예납", date:`${y}-11-30`, category:"세무", desc:"직전연도 산출세액 50% 중간예납 (고지 또는 신고)" }
+  ];
+}
+
+// 매월 정기 일정 (원천세·4대보험: 매월 10일)
+function monthlyEvents(y){
+  const out=[];
+  for(let m=1;m<=12;m++){
+    const mm=String(m).padStart(2,'0');
+    out.push({ id:`m${y}${mm}-wh`, title:`${m}월 원천세 신고·납부`, date:`${y}-${mm}-10`, category:"세무", desc:"전월분 소득세 원천징수분 납부 및 지급명세서 제출(반기납부 승인 사업장은 제외)" });
+    out.push({ id:`m${y}${mm}-ins`, title:`${m}월 4대보험료 납부`, date:`${y}-${mm}-10`, category:"노무", desc:"국민연금·건강보험·고용보험·산재보험 사업장·근로자 부담분 납부" });
+  }
+  return out;
+}
+
+function buildDefault(){
+  const y=yearOf();
+  let list=[];
+  list=list.concat(annualEvents(y));
+  list=list.concat(monthlyEvents(y));
+  // 다음 연도 2기 확정(1월) 안내
+  list.push({ id:`a${y+1}-vat2f`, title:`부가가치세 2기 확정신고 안내(${y+1}년 1월)`, date:`${y+1}-01-25`, category:"신고안내", desc:`${y}년 7월~12월 과세기간 확정신고 예정 (주말이면 연장)` });
+  list.push({ id:`a${y}-bonus`, title:"근로·자녀장려금 신청 안내", date:`${y}-05-01`, category:"신고안내", desc:"5월 1일~31일 홈택스 신청 (대상자 자동 안내)" });
+  list.push({ id:`a${y}-report`, title:"사업장 현황신고(부동산임대업 등)", date:`${y}-02-10`, category:"세무", desc:"해당 업종 사업장 현황신고 기한" });
+  return list;
+}
+
+const LS_KEY='tlm_schedules_v2';
+let userSchedules = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+let schedules = buildDefault();
+
+function allSchedules(){ return schedules.concat(userSchedules); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   렌더링
+   ───────────────────────────────────────────────────────────────────────── */
+function daysUntil(dateStr){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(dateStr+"T00:00:00");
+  return Math.round((d-today)/86400000);
+}
+
+function renderSchedules(){
+  const cat=document.getElementById('filter-category').value;
+  const kw=(document.getElementById('search-keyword').value||'').toLowerCase();
+  const container=document.getElementById('schedule-container');
+  if(!container) return;
+
+  let data=allSchedules().filter(it=>{
+    const mCat = (cat==='ALL') || (cat==='내일정' ? it.category==='내일정' : it.category===cat);
+    const text=(it.title+' '+it.desc).toLowerCase();
+    return mCat && text.includes(kw);
+  }).filter(it=>daysUntil(it.date) >= -30); // 지난 30일 지난 건 제외
+  data.sort((a,b)=> a.date.localeCompare(b.date));
+
+  container.innerHTML='';
+  let upcoming=0;
+  data.forEach(it=>{
+    const dd=daysUntil(it.date);
+    if(dd>=0 && dd<=30) upcoming++;
+    const cls = dd<0 ? '' : (dd<=3 ? 'urgent' : (dd<=7 ? 'soon' : ''));
+    const badgeCls = dd<0 ? 'badge' : (dd<=3 ? 'badge dday' : (dd<=7 ? 'badge soon' : 'badge'));
+    const ddayText = dd<0 ? `D+${Math.abs(dd)}` : (dd===0 ? 'D-DAY' : `D-${dd}`);
+    const catBadge = it.category==='노무' ? 'badge labor' : 'badge';
+    const div=document.createElement('div');
+    div.className='schedule-item '+cls;
+    div.innerHTML=`
+      <div class="schedule-info">
+        <h4>${it.title} <span class="${catBadge}">${it.category}</span></h4>
+        <p>${it.desc} <br><strong>기한: ${it.date}</strong></p>
+      </div>
+      <div style="text-align:right;white-space:nowrap;">
+        <span class="${badgeCls}">${ddayText}</span>
+        ${it.user?`<br><button class="delbtn" onclick="delSchedule('${it.id}')">삭제</button>`:''}
+      </div>`;
+    container.appendChild(div);
+  });
+  document.getElementById('upcoming-count').innerText=upcoming+'건';
+  renderAlertPreview();
+}
+
+function addSchedule(){
+  const title=document.getElementById('new-title').value.trim();
+  const date=document.getElementById('new-date').value;
+  const category=document.getElementById('new-category').value;
+  const desc=document.getElementById('new-desc').value.trim() || '내가 추가한 일정';
+  if(!title || !date){ alert('제목과 날짜를 입력하세요.'); return; }
+  userSchedules.push({ id:'u'+Date.now(), title, date, category, desc, user:true });
+  localStorage.setItem(LS_KEY, JSON.stringify(userSchedules));
+  document.getElementById('new-title').value='';
+  document.getElementById('new-date').value='';
+  document.getElementById('new-desc').value='';
+  renderSchedules();
+  alert('일정이 추가되었습니다.');
+}
+
+function delSchedule(id){
+  userSchedules=userSchedules.filter(x=>x.id!==id);
+  localStorage.setItem(LS_KEY, JSON.stringify(userSchedules));
+  renderSchedules();
+}
+
+function resetSchedules(){
+  if(!confirm('추가한 일정이 모두 삭제되고 기본 일정으로 복원됩니다. 계속할까요?')) return;
+  userSchedules=[];
+  localStorage.setItem(LS_KEY, JSON.stringify(userSchedules));
+  renderSchedules();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   탭 전환
+   ───────────────────────────────────────────────────────────────────────── */
+function showPanel(id, btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   세금 계산기
+   ───────────────────────────────────────────────────────────────────────── */
+function toggleCalcType(){
+  const t=document.getElementById('calc-type').value;
+  const map={ 'vat':'f-vat','vat-simple':'f-vat-simple','income':'f-income','withholding':'f-withholding','insurance':'f-insurance' };
+  Object.values(map).forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById(map[t]).style.display='block';
+}
+
+function disclaimerHtml(){
+  return `<div class="disclaimer-inline">[법적 면책 고지] ${DISCLAIMER}</div>`;
+}
+
+// 종합소득세 기본세율(2023~ 적용, 8구간) 누진공제 방식
+function incomeTaxByBracket(base){
+  const brackets=[
+    {lim:14000000, rate:0.06, ded:0},
+    {lim:50000000, rate:0.15, ded:1260000},
+    {lim:88000000, rate:0.24, ded:5760000},
+    {lim:150000000, rate:0.35, ded:15440000},
+    {lim:300000000, rate:0.38, ded:19940000},
+    {lim:500000000, rate:0.40, ded:25940000},
+    {lim:1000000000, rate:0.42, ded:35940000},
+    {lim:Infinity, rate:0.45, ded:65940000}
+  ];
+  for(const b of brackets){
+    if(base<=b.lim){ return {tax: Math.max(0, base*b.rate - b.ded), rate:b.rate}; }
+  }
+}
+
+function calculate(){
+  const type=document.getElementById('calc-type').value;
+  const box=document.getElementById('calc-result');
+  let html='';
+
+  if(type==='vat'){
+    const supply=parseFloat(document.getElementById('vat-supply').value)||0;
+    const purchase=parseFloat(document.getElementById('vat-purchase').value)||0;
+    const output=supply*0.1;
+    const estimated=Math.max(0, output-purchase);
+    html=`<h3>부가가치세 간이 추정 (일반과세자)</h3>
+      <div class="result-row"><span>매출세액 (공급가액×10%)</span><span>${fmt(output)} 원</span></div>
+      <div class="result-row"><span>공제 매입세액</span><span>${fmt(purchase)} 원</span></div>
+      <div class="result-row result-total"><span>납부 예상액</span><span>${fmt(estimated)} 원</span></div>
+      <p class="note">※ 신고 시 가산세·경감·조기환급 등에 따라 달라질 수 있습니다.</p>${disclaimerHtml()}`;
+  }
+  else if(type==='vat-simple'){
+    const supply=parseFloat(document.getElementById('vats-supply').value)||0;
+    const rate=parseFloat(document.getElementById('vats-rate').value)/100;
+    const base=supply*rate;             // 부가가치(과세표준)
+    const estimated=base*0.1;           // 납부세액
+    html=`<h3>부가가치세 간이 추정 (간이과세자)</h3>
+      <div class="result-row"><span>공급대가</span><span>${fmt(supply)} 원</span></div>
+      <div class="result-row"><span>업종별 부가가치율</span><span>${(rate*100).toFixed(0)}%</span></div>
+      <div class="result-row"><span>과세표준(부가가치)</span><span>${fmt(base)} 원</span></div>
+      <div class="result-row result-total"><span>납부 예상액 (×10%)</span><span>${fmt(estimated)} 원</span></div>
+      <p class="note">※ 세금계산서 발급분·매입세액 공제 등에 따라 달라질 수 있습니다.</p>${disclaimerHtml()}`;
+  }
+  else if(type==='income'){
+    const income=parseFloat(document.getElementById('income-annual').value)||0;
+    const expense=parseFloat(document.getElementById('income-expense').value)||0;
+    const deduct=parseFloat(document.getElementById('income-deduct').value)||0;
+    const net=Math.max(0, income-expense);          // 종합소득금액
+    const base=Math.max(0, net-deduct);             // 과세표준
+    const r=incomeTaxByBracket(base);
+    const local=r.tax*0.1;                          // 지방소득세 10%
+    const total=r.tax+local;
+    html=`<h3>종합소득세 간이 추정</h3>
+      <div class="result-row"><span>종합소득금액 (수입−필요경비)</span><span>${fmt(net)} 원</span></div>
+      <div class="result-row"><span>과세표준 (소득금액−소득공제)</span><span>${fmt(base)} 원</span></div>
+      <div class="result-row"><span>적용 기본세율</span><span>${(r.rate*100).toFixed(0)}%</span></div>
+      <div class="result-row"><span>산출세액(국세)</span><span>${fmt(r.tax)} 원</span></div>
+      <div class="result-row"><span>지방소득세(10%)</span><span>${fmt(local)} 원</span></div>
+      <div class="result-row result-total"><span>합계 예상</span><span>${fmt(total)} 원</span></div>
+      <p class="note">※ 세액공제·감면·기납부세액(중간예납·원천징수) 정산 전 추정치입니다.</p>${disclaimerHtml()}`;
+  }
+  else if(type==='withholding'){
+    const amt=parseFloat(document.getElementById('wh-amount').value)||0;
+    const income=amt*0.03, local=amt*0.003, net=amt-income-local;
+    html=`<h3>원천세 간이 추정 (사업소득 3.3%)</h3>
+      <div class="result-row"><span>지급액</span><span>${fmt(amt)} 원</span></div>
+      <div class="result-row"><span>소득세 3%</span><span>${fmt(income)} 원</span></div>
+      <div class="result-row"><span>지방소득세 0.3%</span><span>${fmt(local)} 원</span></div>
+      <div class="result-row result-total"><span>실지급액</span><span>${fmt(net)} 원</span></div>
+      <p class="note">※ 근로소득은 간이세액표 적용으로 계산 방식이 다릅니다.</p>${disclaimerHtml()}`;
+  }
+  else if(type==='insurance'){
+    const m=parseFloat(document.getElementById('ins-month').value)||0;
+    const pension=m*0.0475;
+    const health=m*0.03595;
+    const ltc=health*0.1295;
+    const emp=m*0.009;
+    const total=pension+health+ltc+emp;
+    html=`<h3>4대보험 근로자 부담분 간이 추정 (2026)</h3>
+      <div class="result-row"><span>국민연금 (4.75%)</span><span>${fmt(pension)} 원</span></div>
+      <div class="result-row"><span>건강보험 (3.595%)</span><span>${fmt(health)} 원</span></div>
+      <div class="result-row"><span>장기요양 (건보료×12.95%)</span><span>${fmt(ltc)} 원</span></div>
+      <div class="result-row"><span>고용보험 실업급여 (0.9%)</span><span>${fmt(emp)} 원</span></div>
+      <div class="result-row result-total"><span>근로자 부담 합계</span><span>${fmt(total)} 원</span></div>
+      <p class="note">※ 산재보험은 전액 사업주 부담. 국민연금 기준소득월액 상·하한(2026년 41만~659만 원) 및 보수월액 정산에 따라 달라질 수 있습니다. 사업주 부담분은 위 금액과 동일 금액(국민연금·건강보험·장기요양·고용보험 실업급여)에 고용안정·직업능력개발(0.25~0.85%)·산재(업종별)가 가산됩니다.</p>${disclaimerHtml()}`;
+  }
+  box.innerHTML=html;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   알림
+   ───────────────────────────────────────────────────────────────────────── */
+function saveAlertPref(){ localStorage.setItem('tlm_alert_days', document.getElementById('alert-days').value); }
+
+function loadAlertPref(){
+  const v=localStorage.getItem('tlm_alert_days');
+  if(v) document.getElementById('alert-days').value=v;
+}
+
+function renderAlertPreview(){
+  const sel=document.getElementById('alert-preview'); if(!sel) return;
+  const days=parseInt(document.getElementById('alert-days').value||'3');
+  const list=allSchedules()
+    .map(it=>({...it, dd:daysUntil(it.date)}))
+    .filter(it=>it.dd>=0 && it.dd<=Math.max(days,14))
+    .sort((a,b)=>a.dd-b.dd);
+  sel.innerHTML = list.length ? '' : '<div style="padding:12px;color:#64748b;">해당 기간에 임박한 일정이 없습니다.</div>';
+  list.forEach(it=>{
+    const div=document.createElement('div');
+    div.className='schedule-item';
+    div.innerHTML=`<div class="schedule-info"><h4>${it.title}</h4><p>기한: ${it.date}</p></div>
+      <span class="badge ${it.dd<=parseInt(days)?'dday':''}">D-${it.dd}</span>`;
+    sel.appendChild(div);
+  });
+}
+
+function updateAlertStatus(){
+  const el=document.getElementById('alert-status');
+  if(!('Notification' in window)){ el.innerHTML='<p>이 브라우저는 알림을 지원하지 않습니다.</p>'; return; }
+  const p=Notification.permission;
+  const label = p==='granted' ? '허용됨 ✅' : (p==='denied' ? '차단됨 ⛔ (브라우저 설정에서 허용 필요)' : '미설정');
+  el.innerHTML=`<p>현재 알림 권한: <b>${label}</b></p>`;
+}
+
+function requestNotify(){
+  if(!('Notification' in window)){ alert('이 브라우저는 알림을 지원하지 않습니다.'); return; }
+  Notification.requestPermission().then(p=>{
+    updateAlertStatus();
+    alert(p==='granted' ? '알림 권한이 허용되었습니다.' : '알림이 허용되지 않았습니다. 브라우저 주소창 옆 설정에서 허용할 수 있습니다.');
+  });
+}
+
+function testNotify(){
+  if('Notification' in window && Notification.permission==='granted'){
+    new Notification('세무·노무 일정 알림 테스트', { body:'이것은 테스트 알림입니다. 실제 알림은 신고 기한이 다가오면 표시됩니다.' });
+  } else {
+    requestNotify();
+  }
+}
+
+// 페이지가 열려 있는 동안 주기적으로 임박 일정 점검 (중복 알림 방지)
+function checkUpcoming(){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const days=parseInt(document.getElementById('alert-days').value||'3');
+  const fired=JSON.parse(sessionStorage.getItem('tlm_fired')||'[]');
+  allSchedules().forEach(it=>{
+    const dd=daysUntil(it.date);
+    if(dd>=0 && dd<=days && !fired.includes(it.id)){
+      new Notification('신고 기한 임박: '+it.title, { body:`기한 ${it.date} (D-${dd}) — 국세청 홈택스/4대보험 정보연계센터에서 확인하세요.` });
+      fired.push(it.id);
+    }
+  });
+  sessionStorage.setItem('tlm_fired', JSON.stringify(fired));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   캘린더(.ics) 내보내기 — 휴대폰 기본 캘린더 등록용
+   ───────────────────────────────────────────────────────────────────────── */
+function exportICS(){
+  const pad=n=>String(n).padStart(2,'0');
+  const stamp=()=>{ const d=new Date(); return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`; };
+  const lines=[
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//10jo Studio//Tax Labor Manager//KO','CALSCALE:GREGORIAN'
+  ];
+  allSchedules().forEach(it=>{
+    const d=it.date.replace(/-/g,'');
+    const next=new Date(it.date+"T00:00:00"); next.setDate(next.getDate()+1);
+    const dEnd=`${next.getFullYear()}${pad(next.getMonth()+1)}${pad(next.getDate())}`;
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${it.id}@tax-labor-manager`);
+    lines.push(`DTSTAMP:${stamp()}`);
+    lines.push(`DTSTART;VALUE=DATE:${d}`);
+    lines.push(`DTEND;VALUE=DATE:${dEnd}`);
+    lines.push(`SUMMARY:${it.title}`);
+    lines.push(`DESCRIPTION:${it.desc} (참고용 보조 도구 알림)`);
+    lines.push('BEGIN:VALARM','TRIGGER:-P3D','ACTION:DISPLAY',`DESCRIPTION:${it.title} 3일 전`,'END:VALARM');
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob=new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='세무노무_일정.ics';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   초기화
+   ───────────────────────────────────────────────────────────────────────── */
+window.onload=function(){
+  renderSchedules();
+  toggleCalcType();
+  loadAlertPref();
+  updateAlertStatus();
+  renderAlertPreview();
+  // 5분마다 임박 일정 점검 (페이지가 열려 있는 동안)
+  setInterval(checkUpcoming, 5*60*1000);
+  checkUpcoming();
+};
+</script>
+</body>
+</html>
