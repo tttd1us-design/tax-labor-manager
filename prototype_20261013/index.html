@@ -114,6 +114,20 @@
   <p>자영업자·소상공인·소규모 사업장을 위한 세무·노무 일정 관리 및 간이 계산 보조 도구</p>
   <p style="font-size:.8rem;opacity:.85;margin-top:6px;">정본 v2 · 2026-10-13 · 단일 파일 정적 앱(서버·DB 없음) · 모든 입력값은 내 브라우저에만 저장</p>
 </header>
+<div id="legal-popup" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000;">
+  <div style="background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;text-align:center;">
+    <p style="margin-bottom:15px;">단순 참고용 모의 시뮬레이터입니다. 공식 세무 신고용이 아닌 이용자 스스로의 시뮬레이션 목적이며, 실제 세무 신고에는 세무사의 확인을 받으시기 바랍니다.</p>
+    <button id="disclaimer-ok" style="padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">확인</button>
+  </div>
+</div>
+<script>
+  (function(){
+    if(localStorage.getItem('disclaimerDismissed')){ return; }
+    var popup=document.getElementById('legal-popup');
+    var btn=document.getElementById('disclaimer-ok');
+    btn.addEventListener('click',function(){ localStorage.setItem('disclaimerDismissed','1'); popup.style.display='none'; });
+  })();
+</script>
 
 <div class="tabs">
   <button class="tab active" onclick="showPanel('panel-schedule',this)">📅 일정 관리</button>
@@ -132,7 +146,7 @@
         <h2>📅 세무·노무 일정 목록</h2>
         <div class="upcoming">
           <span>🔔 30일 이내 주요 신고 일정</span>
-          <span id="upcoming-count" class="badge">0건</span>
+          <span id="upcoming-count" class="badge">30일 이내 임박 일정</span>
         </div>
         <div class="filterbar">
           <select id="filter-category" onchange="renderSchedules()">
@@ -347,14 +361,14 @@
         <div style="margin-top:8px;font-size:12px;color:#28a745;font-weight:bold;">✅ 사용 중</div>
       </div>
       <div style="flex:1;min-width:150px;border:2px solid #f0ad4e;border-radius:8px;padding:12px;text-align:center;position:relative;">
-        <div style="font-weight:bold;font-size:18px;">Pro</div>
-        <div style="font-size:24px;font-weight:bold;color:#f0ad4e;">9,900원</div>
-        <div style="font-size:12px;color:#666;margin-top:8px;">· 사업자 유형별 자동 필터링<br>· 계산 결과 PDF 내보내기<br>· 맞춤 세액공제 추천</div>
-        <div style="position:absolute;top:-10px;right:-10px;background:#f0ad4e;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">프리미엄</div>
-        <button type="button" onclick="showPaymentLocked('Pro')" style="margin-top:8px;padding:6px 16px;background:#f0ad4e;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
-          🔒 결제 필요
-        </button>
-      </div>
+              <div style="font-weight:bold;font-size:18px;">Pro</div>
+              <div id="pro-price" style="font-size:24px;font-weight:bold;color:#f0ad4e;">1,000원</div>
+              <div style="font-size:12px;color:#666;margin-top:8px;">· 사업자 유형별 자동 필터링<br>· 계산 결과 PDF 내보내기<br>· 맞춤 세액공제 추천</div>
+              <div style="position:absolute;top:-10px;right:-10px;background:#f0ad4e;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">프리미엄</div>
+              <button type="button" onclick="showPaymentLocked('Pro')" style="margin-top:8px;padding:6px 16px;background:#f0ad4e;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+                🔒 결제 필요
+              </button>
+            </div>
       <div style="flex:1;min-width:150px;border:2px solid #dc3545;border-radius:8px;padding:12px;text-align:center;position:relative;">
         <div style="font-weight:bold;font-size:18px;">Business</div>
         <div style="font-size:24px;font-weight:bold;color:#dc3545;">29,000원</div>
